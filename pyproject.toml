@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "nimbletl"
+version = "0.1.0"
+description = "Lightweight Python ETL toolkit using Prefect."
+authors = ["Daniel Kapitan <daniel@kapitan.net>"]
+license = "MIT license"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+prefect = "^0.11.0"
+pandas = "^1.1.4"
+
+[tool.poetry.dev-dependencies]
+black = "^19.10b0"
+flake8 = "^3.8.3"
+ipykernel = "^5.3.4"
+ipython = "^7.16.1"
+jedi = "^0.17.2"
+pdoc3 = "^0.8.4"
+pytest = "^5.2"
+Sphinx = "^3.1.2"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
