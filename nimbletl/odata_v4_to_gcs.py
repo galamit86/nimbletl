@@ -62,7 +62,75 @@ def get_odata_v4(target_url):
     return data
 
 
+def convert_table_to_parquet(table, file_name, out_dir):  # (TODO -> IS THERE A FASTER/BETTER WAY??)
+    """ Converts a table to a parquet form and stores it on disk
+
+    Args:
+        - table: table to be converted, in json format
+        - file_name: name of the file to store on disl
+        - out_dir: path to directory to store file
+
+    """
+    # create directories to store files
+    temp_ndjson_dir = Path("./temp/ndjson")
+    create_dir(temp_ndjson_dir)
+    create_dir(out_dir)
+
+    # File path to dump table as ndjson
+    ndjson_path = f"{temp_ndjson_dir}/{file_name}.ndjson"
+    # File path to create as parquet file
+    pq_path = f"{out_dir}/{file_name}.parquet"
+
+    # Dump as ndjson format
+    with open(ndjson_path, 'w+') as ndjson:
+        for record in table:
+            ndjson.write(json.dumps(record) + "\n")
+
+    # Create PyArrow table from ndjson file
+    pa_table = pa_json.read_json(ndjson_path)
+
+    # Store parquet table
+    pq.write_table(pa_table, pq_path)
+
+    # Remove temp ndjson file
+    os.remove(ndjson_path)
+    # Remove temp folder if empty
+    if not os.listdir(temp_ndjson_dir):
+        os.rmdir(temp_ndjson_dir)
+    return pq_path
+
+
 def cbsodatav4_to_gcs(id, schema='cbs', third_party=False):
+    """Load CBS odata v4 into Google Cloud Storage as Parquet.
+
+    For a given dataset id, the following tables are ALWAYS uploaded into GCS
+    (taking `cbs` as default and `83583NED` as example):
+        - ``cbs.83583NED_Observations``: The actual values of the dataset
+        - ``cbs.83583NED_MeasureCodes``: Describing the codes that appear in the Measure column of the Observations table. 
+        - ``cbs.83583NED_Dimensions``: Information over the dimensions
+
+    Additionally, this function will upload all other tables in the dataset, except `Properties`.
+        These may include:
+            - ``cbs.83583NED_MeasureGroups``: Describing the hierarchy of the Measures
+        And, for each Dimensionlisted in the `Dimensions` table (i.e. `{Dimension_1}`)
+            - ``cbs.83583NED_{Dimension_1}Codes
+            - ``cbs.83583NED_{Dimension_1}Groups [IF IT EXISTS]
+
+    See `Informatie voor ontwikelaars <https://dataportal.cbs.nl/info/ontwikkelaars>` for details.
+    
+    Args:
+        - id (str): table ID like `83583NED`
+        - third_party (boolean): 'opendata.cbs.nl' is used by default (False). Set to true for dataderden.cbs.nl
+        - schema (str): schema to load data into
+        - credentials: GCP credentials
+        - GCP: config object
+        - paths: config object for output directory
+
+    Return:
+        - Set: Paths to Parquet files
+        - String: table_description
+    """
+
     base_url = {
         True: None,  # currently no IV3 links in ODATA V4,
         False: f"https://odata4.cbs.nl/CBS/{id}"
@@ -76,10 +144,10 @@ def cbsodatav4_to_gcs(id, schema='cbs', third_party=False):
 
     # gcs_bucket = gcs.bucket(GCP.bucket)
 
-    # Create placeholders
+    # Create placeholders for storage
     files_parquet = set()
-    create_dir("./temp/ndjson")
-    create_dir("./temp/parquet")
+    pq_dir = Path("./temp/parquet")
+    create_dir(pq_dir)
 
     ## Downloading datasets from CBS and converting to Parquet
 
@@ -90,24 +158,12 @@ def cbsodatav4_to_gcs(id, schema='cbs', third_party=False):
 
         # Create table name to be used in GCS
         table_name = f"{schema}.{id}_{key}"
-        # File to dump table as ndjson
-        ndjson_path = f"./temp/ndjson/{table_name}.ndjson"
-        # File to create as parquet file
-        pq_path = f"./temp/parquet/{table_name}.parquet"
 
-        # get data from source
+        # Get data from source
         table = get_odata_v4(url)
 
-        # Dump as ndjson format (TODO -> IS THERE A FASTER/BETTER WAY??)
-        with open(ndjson_path, 'w+') as ndjson:
-            for record in table:
-                ndjson.write(json.dumps(record) + "\n")
-
-        # Create PyArrow table from ndjson file
-        pa_table = pa_json.read_json(ndjson_path)
-
-        # Store parquet table
-        pq.write_table(pa_table, pq_path)
+        # Convert to parquet
+        pq_path = convert_table_to_parquet(table, table_name, pq_dir)
 
         # Add path of file to set
         files_parquet.add(pq_path)
@@ -124,22 +180,5 @@ def cbsodatav4_to_gcs(id, schema='cbs', third_party=False):
 
     return files_parquet, data_set_description
 
+
 cbsodatav4_to_gcs("82807NED")
-
-
-
-
-    # # Upload to GCS
-    # # Name of file in GCS.
-    # gcs_blob = gcs_bucket.blob(pq_dir.split("/")[-1])
-
-    # # Upload file to GCS from given location.
-    # gcs_blob.upload_from_filename(filename=pq_dir)
-
-    # # Name of file in GCS.
-    # gcs_blob = gcs_bucket.blob(pq_dir.split("/")[-1])
-
-    # # Upload file to GCS from given location.
-    # gcs_blob.upload_from_filename(filename=pq_dir)
-                
-    # return files_parquet, data_set_description

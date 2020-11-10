@@ -1,6 +1,0 @@
-{"Id": "0", "Index": 0, "Title": "Kenmerken", "Description": "", "ParentId": null}
-{"Id": "1", "Index": 1, "Title": "Totaal", "Description": "", "ParentId": "0"}
-{"Id": "2", "Index": 2, "Title": "Leeftijd", "Description": "", "ParentId": "0"}
-{"Id": "3", "Index": 3, "Title": "Onderwijs: hoogst behaald niveau", "Description": "", "ParentId": "0"}
-{"Id": "4", "Index": 4, "Title": "Arbeidsduur", "Description": "", "ParentId": "0"}
-{"Id": "5", "Index": 5, "Title": "Positie in de werkkring", "Description": "", "ParentId": "0"}
