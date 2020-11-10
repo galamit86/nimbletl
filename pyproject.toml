@@ -9,6 +9,11 @@ license = "MIT license"
 python = "^3.8"
 prefect = "^0.11.0"
 pandas = "^1.1.4"
+google-auth = "^1.23.0"
+google-cloud-core = "^1.4.3"
+google-cloud-bigquery = "^2.3.1"
+google-cloud-storage = "^1.32.0"
+numpy = "^1.19.4"
 
 [tool.poetry.dev-dependencies]
 black = "^19.10b0"
@@ -19,6 +24,7 @@ jedi = "^0.17.2"
 pdoc3 = "^0.8.4"
 pytest = "^5.2"
 Sphinx = "^3.1.2"
+pyarrow = "^2.0.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

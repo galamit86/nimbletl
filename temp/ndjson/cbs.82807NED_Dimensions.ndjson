@@ -1,0 +1,4 @@
+{"Identifier": "Perioden", "Title": "Perioden", "Description": "", "Kind": "TimeDimension", "MapYear": null, "ReleasePolicy": "True"}
+{"Identifier": "BedrijfstakkenBranchesSBI2008", "Title": "Bedrijfstakken/branches SBI 2008", "Description": "", "Kind": "Dimension", "MapYear": null, "ReleasePolicy": null}
+{"Identifier": "Persoonskenmerken", "Title": "Persoonskenmerken", "Description": "", "Kind": "Dimension", "MapYear": null, "ReleasePolicy": null}
+{"Identifier": "Geslacht", "Title": "Geslacht", "Description": "", "Kind": "Dimension", "MapYear": null, "ReleasePolicy": null}

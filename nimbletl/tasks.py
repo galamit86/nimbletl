@@ -11,6 +11,7 @@ Use `prefect.task` to a function into a task in your dataflow pipeline, for exam
 import datetime
 from pathlib import Path
 import requests
+import json
 from typing import Union, Any
 from zipfile import ZipFile
 
@@ -500,3 +501,143 @@ def gcs_to_bq(prefect_output, third_party=False, credentials=None, GCP=None):
 
     logger.info("The data sets have been loaded into BQ")
     
+
+def get_table_description_v4(url_table_properties):
+    """Gets table description of a table in CBS odata V4.
+
+    Args:
+        - url_table_properties (str): url of the data set `Properties`
+    
+    Returns:
+        - String: table_description
+    """
+    r = requests.get(url_table_properties).json()
+    return r['Description']
+
+
+def get_odata_v4(target_url):
+    """Gets a table from a specific url for CBS Odata v4.
+
+    Args:
+        - url_table_properties (str): url of the table
+    
+    Returns:
+        - data (list): all data received from target url as json type, appeneded in one list
+    """
+    data = []
+    while target_url:
+        r = requests.get(target_url).json()
+        data.extend(r['value'])
+        
+        if '@odata.nextLink' in r:
+            target_url = r['@odata.nextLink']
+        else:
+            target_url = None
+            
+    return data
+
+
+@task(name="get_cbs_data", result=PrefectResult())
+def cbsodatav4_to_gcs(id, third_party=False, schema="cbs", credentials=None, GCP=None, paths=None):
+    """Load CBS odata v4 into Google Cloud Storage as Parquet.
+
+    For a given dataset id, the following tables are ALWAYS uploaded into schema
+    (taking `cbs` as default and `83583NED` as example):
+        - ``cbs.83583NED_Observations``: The actual values of the dataset
+        - ``cbs.83583NED_MeasureCodes``: Describing the codes that appear in the Measure column of the Observations table. 
+        - ``cbs.83583NED_Dimensions``: Information over the dimensions
+
+    Additionally, this function will upload all other tables in the dataset, except `Properties`.
+        These may include:
+            - ``cbs.83583NED_MeasureGroups``: Describing the hierarchy of the Measures
+        And, for each Dimensionlisted in the `Dimensions` table (i.e. `{Dimension_1}`)
+            - ``cbs.83583NED_{Dimension_1}Codes
+            - ``cbs.83583NED_{Dimension_1}Groups [IF IT EXISTS]
+
+
+    See `Informatie voor ontwikelaars <https://dataportal.cbs.nl/info/ontwikkelaars>` for details.
+    
+    Args:
+        - id (str): table ID like `83583NED`
+        - third_party (boolean): 'opendata.cbs.nl' is used by default (False). Set to true for dataderden.cbs.nl
+        - schema (str): schema to load data into
+        - credentials: GCP credentials
+        - GCP: config object
+        - paths: config object for output directory
+
+    Return:
+        - Set: Paths to Parquet files
+        - String: table_description
+    """
+
+    base_url = {
+        True: None, # currently no IV3 links in ODATA V4,
+        False: f"https://odata4.cbs.nl/CBS/{id}"
+    }
+    urls = {
+        item['name']: base_url + "/" + item['url']
+        for item in get_odata_pd(table_url)
+    }
+    output = {
+        True: paths.root / paths.tmp,
+        False: paths.root / paths.cbs,
+    }
+
+    # Getting the description of the data set.
+    data_set_description = get_table_description_v4(urls["Properties"])
+
+    # gcs = storage.Client(project="dataverbinders")
+    gcs = storage.Client(project=GCP.project)
+    gcs_bucket = gcs.bucket(GCP.bucket)
+
+    files_parquet = set()
+
+    # Properties is not needed
+    for key, url in [
+        (k, v) for k, v in urls.items() if k not in ("Properties")
+    ]:
+        table_name = f"{schema}.{id}_{key}"
+        ndjson_path = f"{table_name}.ndjson"
+        pq_path = f"{table_name}.parquet"
+
+        # i = 0
+        # logger = prefect.context.get("logger")
+        # logger.info(f"Processing {key} (i = {i}) from {url}")
+        
+        # get data from source
+        table = get_odata_v4(url)
+        
+        # Dump as ndjson format (IS THERE A FASTER/BETTER WAY??)
+        with open(ndjson_path, 'w+') as ndjson:
+            for record in table:
+                ndjson.write(json.dumps(record) + "\n")
+        
+        # Create PyArrow table from ndjson file
+        table = pa.json.read_json(ndjson_path)
+        
+        # Store parquet table
+        pq.write_table(table, pq_path)
+        
+        # Add path of file to set
+        files_parquet.add(pq_path)
+
+    # Upload to GCS
+    # Name of file in GCS.
+    gcs_blob = gcs_bucket.blob(pq_dir.split("/")[-1])
+
+    # Upload file to GCS from given location.
+    gcs_blob.upload_from_filename(filename=pq_dir)
+        
+
+                
+
+    # Add upload to GCS here!!!
+    pq_writer.close() # Close the Parquet Writer
+
+    # Name of file in GCS.
+    gcs_blob = gcs_bucket.blob(pq_dir.split("/")[-1])
+
+    # Upload file to GCS from given location.
+    gcs_blob.upload_from_filename(filename=pq_dir)
+                
+    return files_parquet, data_set_description
