@@ -74,12 +74,12 @@ def convert_table_to_parquet(table, file_name, out_dir):  # (TODO -> IS THERE A 
     # create directories to store files
     temp_ndjson_dir = Path("./temp/ndjson")
     create_dir(temp_ndjson_dir)
-    create_dir(out_dir)
+    create_dir(Path(out_dir))
 
     # File path to dump table as ndjson
-    ndjson_path = f"{temp_ndjson_dir}/{file_name}.ndjson"
+    ndjson_path = Path(f"{temp_ndjson_dir}/{file_name}.ndjson")
     # File path to create as parquet file
-    pq_path = f"{out_dir}/{file_name}.parquet"
+    pq_path = Path(f"{out_dir}/{file_name}.parquet")
 
     # Dump as ndjson format
     with open(ndjson_path, 'w+') as ndjson:
