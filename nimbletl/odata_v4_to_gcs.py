@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import requests
 import json
+import dask.bag as db
 # import pyarrow as pa
 from pyarrow import json as pa_json
 import pyarrow.parquet as pq
@@ -10,10 +11,10 @@ from google.cloud import storage
 
 def create_dir(path: Path) -> Path:
     """Checks whether path exists and is directory, and creates it if not.
-    
+
     Args:
         - path (Path): path to check
-    
+
     Returns:
         - Path: new directory
     """
@@ -32,7 +33,7 @@ def get_table_description_v4(url_table_properties):
 
     Args:
         - url_table_properties (str): url of the data set `Properties`
-    
+
     Returns:
         - String: table_description
     """
@@ -45,21 +46,33 @@ def get_odata_v4(target_url):
 
     Args:
         - url_table_properties (str): url of the table
-    
+
     Returns:
-        - data (list): all data received from target url as json type, appeneded in one list
+        - data (Dask bag): all data received from target url as json type, in one Dask bag
     """
-    data = []
+    # First call target url and get json formatted response as dict
+    r = requests.get(target_url).json()
+    # Create Dask bag from dict
+    bag = db.from_sequence(r['value'])  # TODO -> define npartitions?
+
+    # check if more data exists
+    if '@odata.nextLink' in r:
+        target_url = r['@odata.nextLink']
+    else:
+        target_url = None
+
+    # if more data exists continue to concat bag until complete
     while target_url:
         r = requests.get(target_url).json()
-        data.extend(r['value'])
-        
+        temp_bag = db.from_sequence(r['value'])
+        bag = db.concat([bag, temp_bag])
+
         if '@odata.nextLink' in r:
             target_url = r['@odata.nextLink']
         else:
             target_url = None
-            
-    return data
+
+    return bag
 
 
 def convert_table_to_parquet(table, file_name, out_dir):  # (TODO -> IS THERE A FASTER/BETTER WAY??)
@@ -117,7 +130,7 @@ def cbsodatav4_to_gcs(id, schema='cbs', third_party=False):
             - ``cbs.83583NED_{Dimension_1}Groups [IF IT EXISTS]
 
     See `Informatie voor ontwikelaars <https://dataportal.cbs.nl/info/ontwikkelaars>` for details.
-    
+
     Args:
         - id (str): table ID like `83583NED`
         - third_party (boolean): 'opendata.cbs.nl' is used by default (False). Set to true for dataderden.cbs.nl
@@ -181,4 +194,5 @@ def cbsodatav4_to_gcs(id, schema='cbs', third_party=False):
     return files_parquet, data_set_description
 
 
-cbsodatav4_to_gcs("82807NED")
+if __name__ == "__main__":
+    cbsodatav4_to_gcs("82807NED")

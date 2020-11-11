@@ -1387,7 +1387,7 @@ heapdict = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "8b1af8ef8dfff367334754c1f525dbc3378ef22d67a4033ff1034c59f97cc36c"
+content-hash = "d1d46d3c36edf3d9b84933635d5446b5272428b916d26519ed8129775c69dc32"
 
 [metadata.files]
 alabaster = [
