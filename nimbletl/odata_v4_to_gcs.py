@@ -3,6 +3,7 @@ from pathlib import Path
 import requests
 import json
 import dask.bag as db
+from datetime import datetime
 # import pyarrow as pa
 from pyarrow import json as pa_json
 import pyarrow.parquet as pq
@@ -85,9 +86,10 @@ def convert_table_to_parquet(table, file_name, out_dir):  # (TODO -> IS THERE A 
 
     """
     # create directories to store files
+    out_dir = Path(out_dir)
     temp_ndjson_dir = Path("./temp/ndjson")
     create_dir(temp_ndjson_dir)
-    create_dir(Path(out_dir))
+    create_dir(out_dir)
 
     # File path to dump table as ndjson
     ndjson_path = Path(f"{temp_ndjson_dir}/{file_name}.ndjson")
@@ -107,13 +109,13 @@ def convert_table_to_parquet(table, file_name, out_dir):  # (TODO -> IS THERE A 
 
     # Remove temp ndjson file
     os.remove(ndjson_path)
-    # Remove temp folder if empty
+    # Remove temp folder if empty  #TODO -> inefficiently(?) creates and removes the folder each time the function is called
     if not os.listdir(temp_ndjson_dir):
         os.rmdir(temp_ndjson_dir)
     return pq_path
 
 
-def cbsodatav4_to_gcs(id, schema='cbs', third_party=False):
+def cbsodatav4_to_gcs(id, schema='cbs', third_party=False):  # TODO -> Add GCS and Paths config objects
     """Load CBS odata v4 into Google Cloud Storage as Parquet.
 
     For a given dataset id, the following tables are ALWAYS uploaded into GCS
@@ -144,6 +146,8 @@ def cbsodatav4_to_gcs(id, schema='cbs', third_party=False):
         - String: table_description
     """
 
+    odata_version = 'v4'
+
     base_url = {
         True: None,  # currently no IV3 links in ODATA V4,
         False: f"https://odata4.cbs.nl/CBS/{id}"
@@ -159,7 +163,7 @@ def cbsodatav4_to_gcs(id, schema='cbs', third_party=False):
 
     # Create placeholders for storage
     files_parquet = set()
-    pq_dir = Path("./temp/parquet")
+    pq_dir = Path(f"./temp/{datetime.today().date().strftime('%Y%m%d')}/parquet")
     create_dir(pq_dir)
 
     ## Downloading datasets from CBS and converting to Parquet
@@ -167,6 +171,8 @@ def cbsodatav4_to_gcs(id, schema='cbs', third_party=False):
     # Iterate over all tables related to dataset, excepet Properties (TODO -> double check that it is redundandt)
     for key, url in [
         (k, v) for k, v in urls.items() if k not in ("Properties")
+        # TEMP - FOR QUICKER TESTS OMIT OBSERVATIONS FROM PROCESSING
+        # (k, v) for k, v in urls.items() if k not in ("Observations", "Properties")
     ]:
 
         # Create table name to be used in GCS
@@ -184,12 +190,13 @@ def cbsodatav4_to_gcs(id, schema='cbs', third_party=False):
     ## Uploading to GCS
 
     # Initialize Google Storage Client, get bucket, set blob (TODO -> consider structure in GCS)
+    # gcs = storage.Client(project=GCP.project)  #when used with GCP Class
     gcs = storage.Client(project="dataverbinders-dev")
     gcs_bucket = gcs.get_bucket("dataverbinders-dev_test")
-    # gcs = storage.Client(project=GCP.project)  #when used with GCP Class
-    for pfile in os.listdir('./temp/parquet/'):
-        gcs_blob = gcs_bucket.blob(pfile)
-        gcs_blob.upload_from_filename("./temp/parquet/"+pfile)
+    gcs_folder = f"{schema}/{odata_version}/{datetime.today().date().strftime('%Y%m%d')}"
+    for pfile in os.listdir(pq_dir):
+        gcs_blob = gcs_bucket.blob(gcs_folder + "/" + pfile)
+        gcs_blob.upload_from_filename(pq_dir/pfile)
 
     return files_parquet, data_set_description
 
