@@ -101,7 +101,7 @@ def convert_table_to_parquet(bag, file_name, out_dir):  # (TODO -> IS THERE A FA
     bag.map(json.dumps).to_textfiles(temp_ndjson_dir/"*.json")
     # Get all json file names with path
     filenames = sorted(glob(str(temp_ndjson_dir)+"/*.json"))
-    # Append all jsons into a single file
+    # Append all jsons into a single file  ## Also possible to use Dask Delayed here https://stackoverflow.com/questions/39566809/writing-dask-partitions-into-single-file
     with open(ndjson_path, 'w+') as ndjson:
         for fn in filenames:
             with open(fn) as f:
@@ -205,7 +205,7 @@ def cbsodatav4_to_gcs(id, schema='cbs', third_party=False):  # TODO -> Add GCS a
     # gcs = storage.Client(project=GCP.project)  #when used with GCP Class
     gcs = storage.Client(project="dataverbinders-dev")
     gcs_bucket = gcs.get_bucket("dataverbinders-dev_test")
-    gcs_folder = f"{schema}/{odata_version}/{datetime.today().date().strftime('%Y%m%d')}"
+    gcs_folder = f"{schema}/{odata_version}/{id}/{datetime.today().date().strftime('%Y%m%d')}"
     for pfile in os.listdir(pq_dir):
         gcs_blob = gcs_bucket.blob(gcs_folder + "/" + pfile)
         gcs_blob.upload_from_filename(pq_dir/pfile)
