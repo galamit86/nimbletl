@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from glob import glob
 import requests
 import json
 import dask.bag as db
@@ -76,11 +77,11 @@ def get_odata_v4(target_url):
     return bag
 
 
-def convert_table_to_parquet(table, file_name, out_dir):  # (TODO -> IS THERE A FASTER/BETTER WAY??)
+def convert_table_to_parquet(bag, file_name, out_dir):  # (TODO -> IS THERE A FASTER/BETTER WAY??)
     """ Converts a table to a parquet form and stores it on disk
 
     Args:
-        - table: table to be converted, in json format
+        - bag: a Dask bag holding with nested dicts in json format  # TODO -> not sure this is a correct description
         - file_name: name of the file to store on disl
         - out_dir: path to directory to store file
 
@@ -96,15 +97,26 @@ def convert_table_to_parquet(table, file_name, out_dir):  # (TODO -> IS THERE A 
     # File path to create as parquet file
     pq_path = Path(f"{out_dir}/{file_name}.parquet")
 
-    # Dump as ndjson format
+    # Dump each bag partition to json file
+    bag.map(json.dumps).to_textfiles(temp_ndjson_dir/"*.json")
+    # Get all json file names with path
+    filenames = sorted(glob(str(temp_ndjson_dir)+"/*.json"))
+    # Append all jsons into a single file
     with open(ndjson_path, 'w+') as ndjson:
-        for record in table:
-            ndjson.write(json.dumps(record) + "\n")
+        for fn in filenames:
+            with open(fn) as f:
+                ndjson.write(f.read())
+            os.remove(fn)
+
+    # # Dump as ndjson format
+    # with open(ndjson_path, 'w+') as ndjson:
+    #     for record in table:
+    #         ndjson.write(json.dumps(record) + "\n")
 
     # Create PyArrow table from ndjson file
     pa_table = pa_json.read_json(ndjson_path)
 
-    # Store parquet table
+    # Store parquet table #TODO -> set proper data types in parquet file
     pq.write_table(pa_table, pq_path)
 
     # Remove temp ndjson file
